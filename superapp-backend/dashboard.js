@@ -1,5 +1,7 @@
 // dashboard.js — dashboard routes for superapp-backend
 // Mounts: GET /dashboard, GET /logs/data, POST /logs/clear
+// NOTE: Browser fetch uses /superapp/logs/* (nginx prefix)
+//       Express routes use /logs/* (nginx strips /superapp before forwarding)
 
 const express = require("express");
 const { readLogs, clearLogs } = require("./logger");
@@ -115,6 +117,10 @@ table.kv td:first-child { color:#88aaff; width:42%; }
 <script>
 let logs=[], sel=null, lastId=null, paused=false;
 
+// Browser fetch uses /superapp prefix — nginx forwards to Express which sees /logs/*
+const DATA_URL  = '/superapp/logs/data';
+const CLEAR_URL = '/superapp/logs/clear';
+
 function togglePause(){
   paused=!paused;
   const b=document.getElementById('btn-pause');
@@ -126,7 +132,7 @@ function togglePause(){
 
 async function clearAll(){
   if(!confirm('Clear all logs?')) return;
-  await fetch('/logs/clear',{method:'POST'});
+  await fetch(CLEAR_URL,{method:'POST'});
   logs=[]; lastId=null; sel=null; render();
   document.getElementById('right').innerHTML='<div class="empty"><span style="font-size:36px">◎</span><span>Logs cleared</span></div>';
   document.getElementById('badge').textContent='0 requests';
@@ -135,7 +141,8 @@ async function clearAll(){
 async function poll(){
   if(paused) return;
   try{
-    const r=await fetch(lastId?'/logs/data?after='+encodeURIComponent(lastId):'/logs/data');
+    const url = lastId ? DATA_URL+'?after='+encodeURIComponent(lastId) : DATA_URL;
+    const r=await fetch(url);
     const d=await r.json();
     if(d.logs&&d.logs.length){
       logs=[...d.logs,...logs].slice(0,500);
@@ -180,11 +187,14 @@ function pick(id){
     '</div>'+
     '<div class="tc on" id="ts">'+
       '<div class="slabel">Details</div>'+
-      '<table class="kv"><tr><td>Method</td><td>'+l.method+'</td></tr><tr><td>Path</td><td>'+l.path+'</td></tr>'+
-      '<tr><td>Status</td><td class="sc '+sc+'">'+l.status+'</td></tr>'+
-      '<tr><td>Duration</td><td>'+(l.duration?l.duration+'ms':'-')+'</td></tr>'+
-      '<tr><td>Time</td><td>'+new Date(l.time).toLocaleString()+'</td></tr>'+
-      '<tr><td>IP</td><td>'+(l.ip||'-')+'</td></tr></table>'+
+      '<table class="kv">'+
+        '<tr><td>Method</td><td>'+l.method+'</td></tr>'+
+        '<tr><td>Path</td><td>'+l.path+'</td></tr>'+
+        '<tr><td>Status</td><td class="sc '+sc+'">'+l.status+'</td></tr>'+
+        '<tr><td>Duration</td><td>'+(l.duration?l.duration+'ms':'-')+'</td></tr>'+
+        '<tr><td>Time</td><td>'+new Date(l.time).toLocaleString()+'</td></tr>'+
+        '<tr><td>IP</td><td>'+(l.ip||'-')+'</td></tr>'+
+      '</table>'+
     '</div>'+
     '<div class="tc" id="treq"><div class="slabel">Request body</div>'+
       (Object.keys(l.reqBody||{}).length?'<pre>'+JSON.stringify(l.reqBody,null,2)+'</pre>':'<div class="none">No body</div>')+
@@ -200,12 +210,13 @@ function pick(id){
 
 function tab(el,id){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
-  document.querySelectorAll('.tab-content,.tc').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
   document.getElementById('t'+id).classList.add('on');
 }
 
-fetch('/logs/data').then(r=>r.json()).then(d=>{
+// Initial load
+fetch(DATA_URL).then(r=>r.json()).then(d=>{
   logs=d.logs||[]; lastId=logs[0]?.id||null;
   document.getElementById('badge').textContent=(d.total||0)+' requests';
   render(); setTimeout(poll,3000);

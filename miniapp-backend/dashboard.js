@@ -1,16 +1,14 @@
 // dashboard.js — dashboard routes for miniapp-backend
 // Mounts: GET /dashboard, GET /logs/data, POST /logs/clear
-// Usage in index.js:
-//   const dashboard = require("./dashboard");
-//   app.use(dashboard);
+// NOTE: Browser fetch uses /miniapp/logs/* (nginx prefix)
+//       Express routes use /logs/* (nginx strips /miniapp before forwarding)
 
 const express = require("express");
 const { readLogs, clearLogs } = require("./logger");
 
 const router = express.Router();
 
-// GET /logs/data?after=<id>
-// Returns only entries newer than the given ID — keeps polling lightweight
+// Express routes — no /miniapp prefix (nginx strips it)
 router.get("/logs/data", (req, res) => {
   const logs  = readLogs();
   const after = req.query.after;
@@ -20,13 +18,11 @@ router.get("/logs/data", (req, res) => {
   return res.json({ logs: logs.slice(0, idx), total: logs.length });
 });
 
-// POST /logs/clear
 router.post("/logs/clear", (req, res) => {
   clearLogs();
   return res.json({ ok: true });
 });
 
-// GET /dashboard — serves the HTML dashboard
 router.get("/dashboard", (req, res) => {
   res.setHeader("Content-Type", "text/html");
   res.send(html());
@@ -122,6 +118,10 @@ table.kv td:first-child { color:#88aaff; width:42%; }
 <script>
 let logs=[], sel=null, lastId=null, paused=false;
 
+// Browser fetch uses /miniapp prefix — nginx forwards to Express which sees /logs/*
+const DATA_URL  = '/miniapp/logs/data';
+const CLEAR_URL = '/miniapp/logs/clear';
+
 function togglePause(){
   paused=!paused;
   const b=document.getElementById('btn-pause');
@@ -133,7 +133,7 @@ function togglePause(){
 
 async function clearAll(){
   if(!confirm('Clear all logs?')) return;
-  await fetch('/logs/clear',{method:'POST'});
+  await fetch(CLEAR_URL,{method:'POST'});
   logs=[]; lastId=null; sel=null; render();
   document.getElementById('right').innerHTML='<div class="empty"><span style="font-size:36px">◎</span><span>Logs cleared</span></div>';
   document.getElementById('badge').textContent='0 requests';
@@ -142,7 +142,8 @@ async function clearAll(){
 async function poll(){
   if(paused) return;
   try{
-    const r=await fetch(lastId?'/logs/data?after='+encodeURIComponent(lastId):'/logs/data');
+    const url = lastId ? DATA_URL+'?after='+encodeURIComponent(lastId) : DATA_URL;
+    const r=await fetch(url);
     const d=await r.json();
     if(d.logs&&d.logs.length){
       logs=[...d.logs,...logs].slice(0,500);
@@ -189,11 +190,14 @@ function pick(id){
     '</div>'+
     '<div class="tc on" id="ts">'+
       '<div class="slabel">Details</div>'+
-      '<table class="kv"><tr><td>Method</td><td>'+l.method+'</td></tr><tr><td>Path</td><td>'+l.path+'</td></tr>'+
-      '<tr><td>Status</td><td class="sc '+sc+'">'+l.status+'</td></tr>'+
-      '<tr><td>Duration</td><td>'+(l.duration?l.duration+'ms':'-')+'</td></tr>'+
-      '<tr><td>Time</td><td>'+new Date(l.time).toLocaleString()+'</td></tr>'+
-      '<tr><td>IP</td><td>'+(l.ip||'-')+'</td></tr></table>'+
+      '<table class="kv">'+
+        '<tr><td>Method</td><td>'+l.method+'</td></tr>'+
+        '<tr><td>Path</td><td>'+l.path+'</td></tr>'+
+        '<tr><td>Status</td><td class="sc '+sc+'">'+l.status+'</td></tr>'+
+        '<tr><td>Duration</td><td>'+(l.duration?l.duration+'ms':'-')+'</td></tr>'+
+        '<tr><td>Time</td><td>'+new Date(l.time).toLocaleString()+'</td></tr>'+
+        '<tr><td>IP</td><td>'+(l.ip||'-')+'</td></tr>'+
+      '</table>'+
     '</div>'+
     '<div class="tc" id="treq"><div class="slabel">Request body</div>'+
       (Object.keys(rb).length?'<pre>'+JSON.stringify(rb,null,2)+'</pre>':'<div class="none">No body</div>')+
@@ -214,7 +218,8 @@ function tab(el,id){
   document.getElementById('t'+id).classList.add('on');
 }
 
-fetch('/logs/data').then(r=>r.json()).then(d=>{
+// Initial load
+fetch(DATA_URL).then(r=>r.json()).then(d=>{
   logs=d.logs||[]; lastId=logs[0]?.id||null;
   document.getElementById('badge').textContent=(d.total||0)+' requests';
   render(); setTimeout(poll,3000);
