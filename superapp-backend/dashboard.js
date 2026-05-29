@@ -51,7 +51,7 @@ button{font-size:12px;background:transparent;padding:4px 12px;border-radius:4px;
 #list{flex:1;overflow-y:auto}
 .ri{padding:10px 12px;border-bottom:1px solid #0f346066;cursor:pointer;display:flex;align-items:center;gap:8px}
 .ri:hover{background:#16213e}
-.ri.sel{background:#0f3460;border-left:3px solid #00b4d8}
+.ri.sel{background:#0f3460;border-left:3px solid #e94560}
 .ri.fl{animation:fla .5s ease}
 @keyframes fla{from{background:#1a3a2e}to{background:transparent}}
 .m{font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;min-width:40px;text-align:center}
@@ -148,7 +148,7 @@ function poll(){
     document.getElementById('dot').style.background='#4caf50';
     document.getElementById('stxt').textContent='live';
   }).catch(function(){
-    document.getElementById('dot').style.background='#00b4d8';
+    document.getElementById('dot').style.background='#e94560';
     document.getElementById('stxt').textContent='error';
   }).finally(function(){
     setTimeout(poll,3000);
@@ -163,8 +163,7 @@ function render(flash){
     var l=f[i];
     var sc=l.status?(l.status<400?'ok':'er'):'pn';
     var cls='ri'+(l.id===sel?' sel':'')+(flash&&i===0&&l.id!==sel?' fl':'');
-    var lid=l.id.replace(/'/g,"\\'");
-    html+='<div class="'+cls+'" onclick="pick(\''+lid+'\')">';
+    html+='<div class="'+cls+'" data-id="'+l.id+'" onclick="pick(this.getAttribute(\'data-id\'))">';
     html+='<span class="m '+l.method+'">'+l.method+'</span>';
     html+='<div class="ri-info"><div class="rp">'+esc(l.path)+'</div><div class="rt">'+new Date(l.time).toLocaleTimeString()+'</div></div>';
     html+='<div class="rm"><div class="sc '+sc+'">'+(l.status||'...')+'</div><div class="dr">'+(l.duration?l.duration+'ms':'')+'</div></div>';

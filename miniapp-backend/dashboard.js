@@ -163,8 +163,7 @@ function render(flash){
     var l=f[i];
     var sc=l.status?(l.status<400?'ok':'er'):'pn';
     var cls='ri'+(l.id===sel?' sel':'')+(flash&&i===0&&l.id!==sel?' fl':'');
-    var lid=l.id.replace(/'/g,"\\'");
-    html+='<div class="'+cls+'" onclick="pick(\''+lid+'\')">';
+    html+='<div class="'+cls+'" data-id="'+l.id+'" onclick="pick(this.getAttribute(\'data-id\'))">';
     html+='<span class="m '+l.method+'">'+l.method+'</span>';
     html+='<div class="ri-info"><div class="rp">'+esc(l.path)+'</div><div class="rt">'+new Date(l.time).toLocaleTimeString()+'</div></div>';
     html+='<div class="rm"><div class="sc '+sc+'">'+(l.status||'...')+'</div><div class="dr">'+(l.duration?l.duration+'ms':'')+'</div></div>';
