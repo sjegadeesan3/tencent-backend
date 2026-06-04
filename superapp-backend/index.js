@@ -32,8 +32,11 @@ app.use((req, res, next) => {
 });
 
 // ── ENV ───────────────────────────────────────────────────────
-const SECRET_KEY       = process.env.APP_ENCRYPT_KEY  || "0123456789abcdef0123456789abcdef";
-const TCSAS_OPENSERVER = process.env.TCSAS_OPENSERVER || "https://api-sg.tcmpp.com";
+const SECRET_KEY          = process.env.APP_ENCRYPT_KEY    || "0123456789abcdef0123456789abcdef";
+const TCSAS_OPENSERVER    = process.env.TCSAS_OPENSERVER  || "https://api-sg.tcmpp.com";
+const MINIAPP_BACKEND_URL = process.env.MINIAPP_BACKEND_URL || "https://tencentminiapptesting.xyz/miniapp";
+// Shared secret so miniapp-backend trusts notifications from superapp-backend
+const NOTIFY_SECRET       = process.env.NOTIFY_SECRET       || "superapp_miniapp_shared_secret_2026";
 
 // ── Helpers ───────────────────────────────────────────────────
 function verifyTCSignature(tcTimestamp, tcSignature) {
@@ -161,12 +164,31 @@ app.post("/v3/pay/transactions/jsapi", (req, res) => {
 app.post("/payment/notify", async (req, res) => {
   const { out_trade_no, prepay_id, openid, amount, status } = req.body;
   if (!out_trade_no) return fail("1001", "Missing out_trade_no", res);
+
+  const event_type = status === "FAILED" ? "TRANSACTION.FAIL" : "TRANSACTION.SUCCESS";
+
+  // Step 1: Forward to SAS (for production payment settlement)
   try {
     await httpPost(`${TCSAS_OPENSERVER}/payment/notify`, {
-      event_type: status === "FAILED" ? "TRANSACTION.FAIL" : "TRANSACTION.SUCCESS",
-      out_trade_no, prepay_id, openid, amount, create_time: new Date().toISOString(),
+      event_type, out_trade_no, prepay_id, openid, amount,
+      create_time: new Date().toISOString(),
     });
   } catch (err) { console.error("  [payment/notify] SAS notify failed:", err.message); }
+
+  // Step 2: Notify miniapp-backend /notify_payBack
+  // superapp-backend is the ONLY caller of miniapp-backend — not Android directly.
+  // This is architecturally correct: super app → superapp-backend → miniapp-backend.
+  // HMAC signature proves this came from superapp-backend, not a forged request.
+  try {
+    const payload   = `${out_trade_no}:${prepay_id}:${event_type}`;
+    const signature = require("crypto").createHmac("sha256", NOTIFY_SECRET)
+                        .update(payload).digest("hex");
+    await httpPost(`${MINIAPP_BACKEND_URL}/notify_payBack`, {
+      event_type, out_trade_no, prepay_id, signature,
+    });
+    console.log(`  [payment/notify] miniapp-backend notified ✅`);
+  } catch (err) { console.error("  [payment/notify] miniapp-backend notify failed:", err.message); }
+
   return ok({ confirmed: true, out_trade_no }, res);
 });
 

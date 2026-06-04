@@ -37,6 +37,8 @@ const APPSECRET           = process.env.APPSECRET           || "YOUR_APPSECRET";
 const JWT_SECRET          = process.env.JWT_SECRET          || "changeme";
 const APPID               = process.env.APPID               || "mpvc3tdaldpq7zpu";
 const MINIAPP_BACKEND_URL = process.env.MINIAPP_BACKEND_URL || "https://tencentminiapptesting.xyz/miniapp";
+// Shared secret with superapp-backend for verifying /notify_payBack calls
+const NOTIFY_SECRET       = process.env.NOTIFY_SECRET       || "superapp_miniapp_shared_secret_2026";
 
 // ── In-memory state ───────────────────────────────────────────
 const users  = {};
@@ -146,11 +148,27 @@ app.post("/v3/pay/transactions/jsapi", async (req, res) => {
 
 // ── POST /notify_payBack — Stage 3: SAS notification ─────────
 app.post("/notify_payBack", (req, res) => {
-  const { event_type, out_trade_no } = req.body;
+  const { event_type, out_trade_no, prepay_id, signature } = req.body;
+
+  // Verify HMAC signature — only superapp-backend knows NOTIFY_SECRET
+  // This ensures miniapp-backend only accepts notifications from superapp-backend
+  if (signature) {
+    const payload  = `${out_trade_no}:${prepay_id}:${event_type}`;
+    const expected = crypto.createHmac("sha256", NOTIFY_SECRET).update(payload).digest("hex");
+    if (signature !== expected) {
+      console.error("  [notify_payBack] Invalid signature — rejecting");
+      return res.json({ code: 401, message: "Invalid signature" });
+    }
+    console.log("  [notify_payBack] Signature verified ✅");
+  }
+
   if (out_trade_no && orders[out_trade_no]) {
     orders[out_trade_no].status     = event_type === "TRANSACTION.SUCCESS" ? "SUCCESS" : "FAILED";
     orders[out_trade_no].notifiedAt = Date.now();
+    console.log(`  [notify_payBack] Order ${out_trade_no} → ${orders[out_trade_no].status}`);
   }
+
+  // ACK — stops SAS retry loop
   return res.json({ code: 200, message: "OK" });
 });
 
