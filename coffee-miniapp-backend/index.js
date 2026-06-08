@@ -146,6 +146,39 @@ app.post("/v3/pay/transactions/jsapi", async (req, res) => {
     signType: "RSA", paySign, out_trade_no });
 });
 
+// ── POST /payOrderV3 — Stage 1: Pre-order (Coffee uses this name) ──
+// Alias for /v3/pay/transactions/jsapi — same logic, different URL
+// Coffee mini app calls POST /payOrderV3 with {appid, goods_detail, id, token}
+app.post("/payOrderV3", async (req, res) => {
+  // Map coffee request format to standard format
+  const goods_detail = req.body.goods_detail || [];
+  const token        = req.body.token;
+  const discount     = req.body.discount || 0;
+
+  if (!token) return res.json({ code: 401, data: { msg: "Missing token" } });
+  const payload = verifyToken(token);
+  if (!payload) return res.json({ code: 401, data: { msg: "Invalid or expired token" } });
+  if (!goods_detail || goods_detail.length === 0) return res.json({ code: 400, data: { msg: "No goods in order" } });
+
+  const out_trade_no = `order_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const timeStamp    = Math.floor(Date.now() / 1000).toString();
+  const nonceStr     = crypto.randomBytes(10).toString("hex");
+  const totalCents   = goods_detail.reduce((s, i) => s + Math.round((i.unit_price || 0) * 100) * (i.quantity || 1), 0);
+  const finalAmount  = Math.max(totalCents - Math.round((discount || 0) * 100), 1);
+  const prepayId     = `prepay_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
+  const paySign      = `TCSAS_PAY_${crypto.randomBytes(16).toString("hex")}`;
+
+  orders[out_trade_no] = {
+    out_trade_no, openid: payload.openid, prepayId,
+    status: "PENDING", amount: finalAmount, goods: goods_detail, createdAt: Date.now()
+  };
+
+  console.log(`  [payOrderV3] ✅ out_trade_no=${out_trade_no} amount=${finalAmount}`);
+
+  return res.json({ code: 200, timeStamp, nonceStr,
+    package: `prepay_id=${prepayId}`, signType: "RSA", paySign, out_trade_no });
+});
+
 // ── POST /notify_payBack — Stage 3: SAS notification ─────────
 app.post("/notify_payBack", (req, res) => {
   const { event_type, out_trade_no, prepay_id, signature } = req.body;
