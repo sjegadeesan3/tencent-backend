@@ -34,9 +34,22 @@ app.use((req, res, next) => {
 // ── ENV ───────────────────────────────────────────────────────
 const SECRET_KEY          = process.env.APP_ENCRYPT_KEY    || "0123456789abcdef0123456789abcdef";
 const TCSAS_OPENSERVER    = process.env.TCSAS_OPENSERVER  || "https://api-sg.tcmpp.com";
-const MINIAPP_BACKEND_URL = process.env.MINIAPP_BACKEND_URL || "https://tencentminiapptesting.xyz/miniapp";
 // Shared secret so miniapp-backend trusts notifications from superapp-backend
-const NOTIFY_SECRET       = process.env.NOTIFY_SECRET       || "superapp_miniapp_shared_secret_2026";
+const NOTIFY_SECRET          = process.env.NOTIFY_SECRET          || "superapp_miniapp_shared_secret_2026";
+const MINIAPP_BACKEND_URL    = process.env.MINIAPP_BACKEND_URL    || "https://tencentminiapptesting.xyz/miniapp";
+const COFFEE_BACKEND_URL     = process.env.COFFEE_BACKEND_URL     || "https://tencentminiapptesting.xyz/coffee";
+
+// Route appId → correct miniapp-backend URL
+// Ecommerce: direct Android call (no Passthrough)
+// Coffee: SAS Passthrough call
+const MINIAPP_BACKEND_MAP = {
+  "mpvc3tdaldpq7zpu": MINIAPP_BACKEND_URL,  // ecommerce
+  "mpapkxdfqzgbvj67": COFFEE_BACKEND_URL,   // starbucks coffee
+};
+function getMiniAppBackendUrl(appid) {
+  if (!appid) return MINIAPP_BACKEND_URL;   // fallback to ecommerce for legacy calls
+  return MINIAPP_BACKEND_MAP[appid] || MINIAPP_BACKEND_URL;
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 function verifyTCSignature(tcTimestamp, tcSignature) {
