@@ -157,7 +157,14 @@ app.post("/getUserInfo", async (req, res) => {
 
   return res.json({
     code: 200,
-    data: { token, userId: user.id, openid, userName: "Starbucks User", avatarUrl: "" }
+    data: {
+      token,
+      userId:   user.id,
+      account:  user.id,  // mini app checks 'account' field to confirm login success
+      openid,
+      userName: "Starbucks User",
+      avatarUrl: ""
+    }
   });
 });
 
