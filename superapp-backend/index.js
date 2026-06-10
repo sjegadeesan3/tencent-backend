@@ -36,18 +36,7 @@ const SECRET_KEY          = process.env.APP_ENCRYPT_KEY    || "0123456789abcdef0
 const TCSAS_OPENSERVER    = process.env.TCSAS_OPENSERVER  || "https://api-sg.tcmpp.com";
 const MINIAPP_BACKEND_URL = process.env.MINIAPP_BACKEND_URL || "https://tencentminiapptesting.xyz/miniapp";
 // Shared secret so miniapp-backend trusts notifications from superapp-backend
-const NOTIFY_SECRET          = process.env.NOTIFY_SECRET          || "superapp_miniapp_shared_secret_2026";
-// Coffee miniapp-backend URL — separate backend for Starbucks mini app
-const COFFEE_BACKEND_URL     = process.env.COFFEE_BACKEND_URL     || "https://tencentminiapptesting.xyz/coffee";
-// Map appId → miniapp-backend URL
-// Add new mini apps here as you onboard them
-const MINIAPP_BACKEND_MAP = {
-  "mpvc3tdaldpq7zpu": MINIAPP_BACKEND_URL,   // ecommerce
-  "mpapkxdfqzgbvj67": COFFEE_BACKEND_URL,    // starbucks coffee
-};
-function getMiniAppBackendUrl(appId) {
-  return MINIAPP_BACKEND_MAP[appId] || MINIAPP_BACKEND_URL;
-}
+const NOTIFY_SECRET       = process.env.NOTIFY_SECRET       || "superapp_miniapp_shared_secret_2026";
 
 // ── Helpers ───────────────────────────────────────────────────
 function verifyTCSignature(tcTimestamp, tcSignature) {
@@ -173,18 +162,32 @@ app.post("/v3/pay/transactions/jsapi", (req, res) => {
 });
 
 app.post("/payment/notify", async (req, res) => {
+  // Verify tc-signature — SAS signs every call with AES-ECB encrypted timestamp
+  // Same pattern as /user/checkUser — ensures call is genuinely from SAS
+  const tcTimestamp = req.headers["x-tc-timestamp"] || req.headers["tc-timestamp"] || "";
+  const tcSignature = req.headers["x-tc-signature"] || req.headers["tc-signature"] || "";
+
+  if (tcTimestamp && tcSignature) {
+    if (!verifyTCSignature(tcTimestamp, tcSignature)) {
+      console.error("  [payment/notify] Invalid tc-signature — rejecting");
+      return res.json({ returnCode: "1003", returnMessage: "Invalid signature", requestId: uuidv4() });
+    }
+    console.log("  [payment/notify] tc-signature verified ✅ (SAS Passthrough call)");
+  } else {
+    // No SAS headers — direct call from Android (ecommerce POC, no Passthrough)
+    console.log("  [payment/notify] No tc-signature — direct Android call");
+  }
+
   const { out_trade_no, prepay_id, openid, amount, status, appid } = req.body;
-  if (!out_trade_no) return fail("1001", "Missing out_trade_no", res);
+  if (!out_trade_no) return res.json({ returnCode: "1001", returnMessage: "Missing out_trade_no", requestId: uuidv4() });
 
   const event_type = status === "FAILED" ? "TRANSACTION.FAIL" : "TRANSACTION.SUCCESS";
 
   // Route to correct miniapp-backend based on appid
-  // With Tencent Passthrough mode, SAS calls this endpoint automatically
-  // after wx.requestPayment() confirms — Android no longer calls this directly
   const targetBackend = getMiniAppBackendUrl(appid);
   console.log(`  [payment/notify] appid=${appid} routing to ${targetBackend}`);
 
-  // Notify correct miniapp-backend /notify_payBack with HMAC signature
+  // Notify miniapp-backend /notify_payBack with HMAC signature
   try {
     const payload   = `${out_trade_no}:${prepay_id}:${event_type}`;
     const signature = require("crypto").createHmac("sha256", NOTIFY_SECRET)
@@ -195,7 +198,8 @@ app.post("/payment/notify", async (req, res) => {
     console.log(`  [payment/notify] miniapp-backend notified ✅`);
   } catch (err) { console.error("  [payment/notify] miniapp-backend notify failed:", err.message); }
 
-  return ok({ confirmed: true, out_trade_no }, res);
+  // Standard SAS ACK — returnCode "0" tells SAS delivery succeeded
+  return res.json({ returnCode: "0", returnMessage: "ok", requestId: uuidv4() });
 });
 
 app.post("/payment/callback", (req, res) => {
