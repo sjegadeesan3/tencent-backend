@@ -374,4 +374,4 @@ setInterval(refresh, 3000);
   res.end();
 });
 
-module.exports = router;g
+module.exports = router;
