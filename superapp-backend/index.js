@@ -125,7 +125,11 @@ const fail = (code, msg, res) => res.json({ returnCode: code, returnMessage: msg
 // SAS receives from MP backend, forwards here, we return prepay_id
 // ═══════════════════════════════════════════════════════════════
 app.post("/v3/pay/transactions/jsapi", async (req, res) => {
-  const { appid, mchid, description, out_trade_no, notify_url, amount, payer, detail } = req.body;
+  // mchid comes from Authorization header (not body per Tencent spec)
+  const authHeader = req.headers["authorization"] || "";
+  const mchidMatch = authHeader.match(/mchid="([^"]+)"/);
+  const mchid = mchidMatch ? mchidMatch[1] : (req.body.mchid || MERCHANT_ID);
+  const { appid, description, out_trade_no, notify_url, amount, payer, detail } = req.body;
   console.log(`  [/v3/pay/transactions/jsapi] order from SAS — appid=${appid} mchid=${mchid} out_trade_no=${out_trade_no}`);
 
   if (!appid || !mchid || !out_trade_no || !amount || !payer) {
