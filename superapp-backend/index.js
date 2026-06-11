@@ -233,16 +233,24 @@ app.post("/payment/confirm", async (req, res) => {
 // This triggers SAS to async notify MP backend
 // ═══════════════════════════════════════════════════════════════
 async function notifySASPaymentResult(order) {
-  const url  = `${TCSAS_OPENSERVER}/pay/paymentnotify`;
+  // POST /payment/callback — tells SAS payment is complete
+  // This updates order status in TCSAS portal to "Paid"
+  const url  = `${TCSAS_OPENSERVER}/payment/callback`;
   const body = JSON.stringify({
-    appid:          order.appid,
-    mchid:          order.mchid,
-    out_trade_no:   order.out_trade_no,
-    transaction_id: order.transaction_id,
-    trade_state:    "SUCCESS",
-    amount:         order.amount,
-    payer:          order.payer,
-    notify_url:     order.notify_url,
+    id:             uuidv4(),
+    create_time:    new Date().toISOString(),
+    resource_type:  "transaction",
+    event_type:     "TRANSACTION.SUCCESS",
+    summary:        "pay success",
+    resource: {
+      appid:          order.appid,
+      mchid:          order.mchid || MERCHANT_ID,
+      out_trade_no:   order.out_trade_no,
+      transaction_id: order.transaction_id,
+      trade_state:    "SUCCESS",
+      amount:         order.amount,
+      payer:          order.payer,
+    }
   });
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
