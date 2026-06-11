@@ -196,7 +196,6 @@ app.post("/payOrderV3", async (req, res) => {
   // and return prepay_id
   const orderBody = {
     appid:       APPID,
-    mchid:       MCHID,
     description: goods_detail?.[0]?.goods_name || "Coffee Order",
     out_trade_no,
     notify_url:  `${MINIAPP_BACKEND_URL}/notify_payBack`,
