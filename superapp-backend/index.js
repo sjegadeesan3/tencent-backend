@@ -324,10 +324,19 @@ app.post("/payment/notify", async (req, res) => {
   if (!out_trade_no) return res.json({ returnCode: "1001", returnMessage: "Missing out_trade_no", requestId: uuidv4() });
 
   const event_type   = status === "FAILED" ? "TRANSACTION.FAIL" : "TRANSACTION.SUCCESS";
-  console.log(`  [/payment/notify] appid=${appid} payment confirmed — SAS will deliver notify_payBack async`);
+  const targetBackend = getMiniAppBackendUrl(appid);
+  console.log(`  [/payment/notify] appid=${appid} routing to ${targetBackend}`);
 
-  // NOTE: SAS already delivers /notify_payBack to MP backend directly (confirmed via nginx logs)
-  // We do NOT call /notify_payBack here to avoid double delivery
+  try {
+    const payload   = `${out_trade_no}:${prepay_id}:${event_type}`;
+    const signature = crypto.createHmac("sha256", NOTIFY_SECRET).update(payload).digest("hex");
+    await httpPost(`${targetBackend}/notify_payBack`, {
+      event_type, out_trade_no, prepay_id, appid, signature,
+    });
+    console.log(`  [/payment/notify] MP backend notified ✅`);
+  } catch (err) {
+    console.error("  [/payment/notify] MP backend notify failed:", err.message);
+  }
 
   // Notify SAS /payment/callback — updates order status to Paid in portal
   const orderStore = global.orderStore || {};
