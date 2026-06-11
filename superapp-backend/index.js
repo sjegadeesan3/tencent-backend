@@ -221,7 +221,7 @@ app.post("/payment/confirm", async (req, res) => {
 // This triggers SAS to async notify MP backend
 // ═══════════════════════════════════════════════════════════════
 async function notifySASPaymentResult(order) {
-  const url  = `${TCSAS_OPENSERVER}/pay/paymentnotify`;
+  const url  = `${TCSAS_OPENSERVER}/payment/pay/paymentnotify`;
   const body = JSON.stringify({
     appid:          order.appid,
     mchid:          order.mchid,
