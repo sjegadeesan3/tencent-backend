@@ -229,12 +229,12 @@ app.post("/payOrderV3", async (req, res) => {
 
     const sasResponse = await httpPost(sasUrl, orderBody, {
       "Authorization":     authHeader,
-      "TCPaymentCallback": `${SUPERAPP_BACKEND_URL}/payment/notify`,
-      "TCMerchantID":      MCHID,
+      "TC-Payment-Callback": `${SUPERAPP_BACKEND_URL}/payment/notify`,
+      "TC-MerchantID":      MCHID,
       "TC-UserID":         user.openid,
-      "TCTradeType":       "JSAPI",
-      "TCPlatformUserID":  user.openid,
-      "TCApplicationID":   process.env.SUPERAPP_ID || "app-zz8btbv1s4",
+      "TC-TradeType":       "JSAPI",
+      "TC-Platform-UserID":  user.openid,
+      "TC-ApplicationID":   process.env.SUPERAPP_ID || "app-zz8btbv1s4",
       "Content-Type":      "application/json"
     });
     console.log(`  [/payOrderV3] SAS response:`, JSON.stringify(sasResponse));
