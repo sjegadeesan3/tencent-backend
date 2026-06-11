@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require("uuid");
 
 const { captureMiddleware } = require("./logger");
 const dashboard             = require("./dashboard");
+const serverDashboard       = require("./serverDashboard");
 
 const app = express();
 app.use((req, res, next) => { res.setHeader("ngrok-skip-browser-warning", "true"); next(); });
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(captureMiddleware);
 app.use(dashboard);
+app.use("/serverDashboard", serverDashboard);
 app.use((req, res, next) => {
   if (req.path === "/dashboard" || req.path.startsWith("/logs")) return next();
   console.log(`\n[SUPERAPP] ${new Date().toISOString()} ${req.method} ${req.path}`);
@@ -221,7 +223,7 @@ app.post("/payment/confirm", async (req, res) => {
 // This triggers SAS to async notify MP backend
 // ═══════════════════════════════════════════════════════════════
 async function notifySASPaymentResult(order) {
-  const url  = `${TCSAS_OPENSERVER}/payment/pay/paymentnotify`;
+  const url  = `${TCSAS_OPENSERVER}/pay/paymentnotify`;
   const body = JSON.stringify({
     appid:          order.appid,
     mchid:          order.mchid,
