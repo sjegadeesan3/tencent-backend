@@ -148,7 +148,13 @@ app.post("/v3/pay/transactions/jsapi", async (req, res) => {
   };
 
   console.log(`  [/v3/pay/transactions/jsapi] prepay_id=${prepay_id} ✅`);
-  return res.json({ prepay_id });
+  // SAS expects: returnCode, data.prepayId, requestId
+  return res.json({
+    returnCode:    "0",
+    returnMessage: "success",
+    data:          { prepayId: prepay_id },
+    requestId:     uuidv4()
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

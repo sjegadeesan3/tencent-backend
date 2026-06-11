@@ -238,7 +238,8 @@ app.post("/payOrderV3", async (req, res) => {
       "Content-Type":      "application/json"
     });
     console.log(`  [/payOrderV3] SAS response:`, JSON.stringify(sasResponse));
-    prepay_id = sasResponse.prepay_id;
+    // SAS returns data.prepayId per spec
+    prepay_id = (sasResponse.data && sasResponse.data.prepayId) ? sasResponse.data.prepayId : sasResponse.prepay_id;
   } catch (err) {
     console.error(`  [/payOrderV3] SAS call failed: ${err.message}`);
   }
