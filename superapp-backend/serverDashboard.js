@@ -169,6 +169,7 @@ router.get("/", (req, res) => {
   <span class="badge">POC</span>
   <div class="actions">
     <button class="btn danger" onclick="clearAll()">Clear All Logs</button>
+    <button class="btn" onclick="copyAllLogs()" id="copyBtn">📋 Copy All Logs</button>
     <button class="btn" onclick="refresh()">Refresh</button>
   </div>
 </div>
@@ -294,6 +295,52 @@ async function loadPm2(service) {
   } catch(e) { console.error(e); }
 }
 
+async function copyAllLogs() {
+  const btn = document.getElementById('copyBtn');
+  try {
+    // Fetch all data
+    const [nginx, superapp, coffee, miniapp] = await Promise.all([
+      fetch(BASE + '/serverDashboard/api/nginx').then(r => r.json()),
+      fetch(BASE + '/serverDashboard/api/pm2/superapp').then(r => r.json()),
+      fetch(BASE + '/serverDashboard/api/pm2/coffee').then(r => r.json()),
+      fetch(BASE + '/serverDashboard/api/pm2/miniapp').then(r => r.json()),
+    ]);
+
+    const lines = [
+      '═══════════════════════════════════════',
+      '  UOB TMRW Server Dashboard — Log Dump',
+      '  ' + new Date().toISOString(),
+      '═══════════════════════════════════════',
+      '',
+      '── NGINX ACCESS LOG ──────────────────',
+      ...nginx.map(function(e){ return '[' + e.time + '] ' + e.ip + ' ' + e.method + ' ' + e.path + ' ' + e.status; }),
+      '',
+      '── SUPERAPP BACKEND ──────────────────',
+      ...superapp.slice().reverse(),
+      '',
+      '── COFFEE MINIAPP BACKEND ────────────',
+      ...coffee.slice().reverse(),
+      '',
+      '── ECOMMERCE MINIAPP BACKEND ─────────',
+      ...miniapp.slice().reverse(),
+    ];
+
+    await navigator.clipboard.writeText(lines.join('\n'));
+    btn.textContent = '✅ Copied!';
+    btn.style.borderColor = 'var(--green)';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => {
+      btn.textContent = '📋 Copy All Logs';
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }, 2000);
+  } catch(e) {
+    btn.textContent = '❌ Failed';
+    setTimeout(() => { btn.textContent = '📋 Copy All Logs'; }, 2000);
+    console.error(e);
+  }
+}
+
 async function refresh() {
   await Promise.all([
     loadNginx(),
@@ -327,4 +374,4 @@ setInterval(refresh, 3000);
   res.end();
 });
 
-module.exports = router;
+module.exports = router;g

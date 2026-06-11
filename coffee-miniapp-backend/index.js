@@ -200,7 +200,10 @@ app.post("/payOrderV3", async (req, res) => {
     description: goods_detail?.[0]?.goods_name || "Coffee Order",
     out_trade_no,
     notify_url:  `${MINIAPP_BACKEND_URL}/notify_payBack`,
-    time_expire: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    time_expire: (() => {
+      const d = new Date(Date.now() + 30 * 60 * 1000);
+      return d.toISOString().replace('Z', '+08:00').replace(/\.\d{3}/, '');
+    })(),
     amount:      { total: totalAmount, currency: "SGD" },
     payer:       { openid: user.openid },
     detail:      { goods_detail: goods_detail || [] }
