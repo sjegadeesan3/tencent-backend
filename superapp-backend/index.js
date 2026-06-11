@@ -339,6 +339,21 @@ app.post("/payment/notify", async (req, res) => {
     console.error("  [/payment/notify] MP backend notify failed:", err.message);
   }
 
+  // Notify SAS /payment/callback — updates order status to Paid in portal
+  const orderStore = global.orderStore || {};
+  const order = Object.values(orderStore).find(function(o) { return o.out_trade_no === out_trade_no; });
+  if (order) {
+    order.status = "SUCCESS";
+    order.transaction_id = order.transaction_id || ("txn_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex"));
+    setImmediate(async function() {
+      try {
+        await notifySASPaymentResult(order);
+      } catch (err) {
+        console.error("  [/payment/notify] SAS callback failed:", err.message);
+      }
+    });
+  }
+
   return res.json({ returnCode: "0", returnMessage: "ok", requestId: uuidv4() });
 });
 
