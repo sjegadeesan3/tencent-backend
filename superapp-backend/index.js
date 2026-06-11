@@ -274,14 +274,13 @@ async function notifySASPaymentResult(order) {
     });
     console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
 
-    // If SAS is unavailable or returns error, fall back to direct notify
-    if (!result || result.returnCode !== "0") {
-      console.log(`  [notifySASPaymentResult] SAS unavailable — fallback direct notify to MP backend`);
-      await directNotifyMPBackend(order);
+    if (result && result.returnCode === "0") {
+      console.log(`  [notifySASPaymentResult] SAS callback accepted ✅`);
+    } else {
+      console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
     }
   } catch (err) {
-    console.error(`  [notifySASPaymentResult] SAS call failed: ${err.message} — fallback direct notify`);
-    await directNotifyMPBackend(order);
+    console.error(`  [notifySASPaymentResult] SAS call failed: ${err.message}`);
   }
 }
 
@@ -325,19 +324,10 @@ app.post("/payment/notify", async (req, res) => {
   if (!out_trade_no) return res.json({ returnCode: "1001", returnMessage: "Missing out_trade_no", requestId: uuidv4() });
 
   const event_type   = status === "FAILED" ? "TRANSACTION.FAIL" : "TRANSACTION.SUCCESS";
-  const targetBackend = getMiniAppBackendUrl(appid);
-  console.log(`  [/payment/notify] appid=${appid} routing to ${targetBackend}`);
+  console.log(`  [/payment/notify] appid=${appid} payment confirmed — SAS will deliver notify_payBack async`);
 
-  try {
-    const payload   = `${out_trade_no}:${prepay_id}:${event_type}`;
-    const signature = crypto.createHmac("sha256", NOTIFY_SECRET).update(payload).digest("hex");
-    await httpPost(`${targetBackend}/notify_payBack`, {
-      event_type, out_trade_no, prepay_id, appid, signature,
-    });
-    console.log(`  [/payment/notify] MP backend notified ✅`);
-  } catch (err) {
-    console.error("  [/payment/notify] MP backend notify failed:", err.message);
-  }
+  // NOTE: SAS already delivers /notify_payBack to MP backend directly (confirmed via nginx logs)
+  // We do NOT call /notify_payBack here to avoid double delivery
 
   // Notify SAS /payment/callback — updates order status to Paid in portal
   const orderStore = global.orderStore || {};
