@@ -92,22 +92,6 @@ function httpPost(url, body, headers = {}) {
   });
 }
 
-// ── RSA Signature (WECHATPAY2-SHA256-RSA2048) ─────────────────
-// Used when superapp-backend calls SAS /v3/pay/transactions/jsapi
-function generateRSASignature(method, url, timestamp, nonce, body) {
-  const message = `${method}\n${url}\n${timestamp}\n${nonce}\n${body}\n`;
-  const sign = crypto.createSign("RSA-SHA256");
-  sign.update(message);
-  return sign.sign(MERCHANT_PRIVATE_KEY, "base64");
-}
-
-function buildAuthorizationHeader(method, url, body) {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce     = crypto.randomBytes(16).toString("hex").toUpperCase();
-  const signature = generateRSASignature(method, url, timestamp, nonce, body);
-  return `WECHATPAY2-SHA256-RSA2048 mchid="${MERCHANT_ID}",nonce_str="${nonce}",signature="${signature}",timestamp="${timestamp}",serial_no="${MERCHANT_CERT_SERIAL}"`;
-}
-
 // ── paySign generation (for wx.requestPayment) ────────────────
 function generatePaySign(appid, timestamp, nonceStr, prepayId) {
   const message = `${appid}\n${timestamp}\n${nonceStr}\n${prepayId}\n`;

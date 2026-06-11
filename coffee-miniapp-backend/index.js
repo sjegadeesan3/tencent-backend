@@ -206,33 +206,49 @@ app.post("/payOrderV3", async (req, res) => {
     detail:      { goods_detail: goods_detail || [] }
   };
 
+  // Step 2: Call SAS /v3/pay/transactions/jsapi → superapp-backend → prepay_id
   let prepay_id;
   try {
-    const sasUrl    = `${TCSAS_OPENSERVER}/v3/pay/transactions/jsapi`;
-    const bodyStr   = JSON.stringify(orderBody);
+    const sasUrl  = `${TCSAS_OPENSERVER}/v3/pay/transactions/jsapi`;
+    const bodyStr = JSON.stringify(orderBody);
     console.log(`  [/payOrderV3] POST ${sasUrl}`);
 
-    // Build Authorization header with RSA signature
-    const sasResponse = await httpPost(sasUrl, orderBody, {
-      "Authorization": (() => {
-        if (!MERCHANT_PRIVATE_KEY) return `TCSAS_PAY_AUTH_${crypto.randomBytes(8).toString("hex")}`;
-        const ts   = Math.floor(Date.now() / 1000).toString();
-        const nc   = crypto.randomBytes(16).toString("hex").toUpperCase();
-        const msg  = `POST\n/v3/pay/transactions/jsapi\n${ts}\n${nc}\n${bodyStr}\n`;
-        const sign = crypto.createSign("RSA-SHA256");
-        sign.update(msg);
-        const sig  = sign.sign(MERCHANT_PRIVATE_KEY, "base64");
-        return `WECHATPAY2-SHA256-RSA2048 mchid="${MCHID}",nonce_str="${nc}",signature="${sig}",timestamp="${ts}",serial_no="${MERCHANT_CERT_SERIAL}"`;
-      })()
-    });
+    // Use tc-signature AES-ECB — same auth method as login /user/checkUser
+    const tcTimestamp = Date.now().toString();
+    const APP_ENCRYPT_KEY = process.env.APP_ENCRYPT_KEY || "0123456789abcdef0123456789abcdef";
+    const tcSig = (() => {
+      const key     = Buffer.from(APP_ENCRYPT_KEY.substring(0, 32).padEnd(32, "0"), "utf8");
+      const ts      = Buffer.from(tcTimestamp, "utf8");
+      const padding = 16 - (ts.length % 16);
+      const padded  = Buffer.concat([ts, Buffer.alloc(padding, padding)]);
+      const cipher  = crypto.createCipheriv("aes-256-ecb", key, null);
+      cipher.setAutoPadding(false);
+      return Buffer.concat([cipher.update(padded), cipher.final()]).toString("hex");
+    })();
 
+    const sasResponse = await httpPost(sasUrl, orderBody, {
+      "x-tc-timestamp": tcTimestamp,
+      "x-tc-signature": tcSig,
+      "Content-Type":   "application/json"
+    });
     console.log(`  [/payOrderV3] SAS response:`, JSON.stringify(sasResponse));
     prepay_id = sasResponse.prepay_id;
   } catch (err) {
     console.error(`  [/payOrderV3] SAS call failed: ${err.message}`);
-    // Fallback: generate prepay_id locally if SAS unavailable
+  }
+
+  // Always ensure prepay_id — generate locally if SAS unavailable or returned empty
+  if (!prepay_id) {
     prepay_id = `prepay_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
-    console.log(`  [/payOrderV3] using local prepay_id=${prepay_id}`);
+    console.log(`  [/payOrderV3] SAS unavailable — local prepay_id=${prepay_id}`);
+    // Register order directly in superapp-backend so /payment/notify routing works
+    try {
+      const spResp = await httpPost(`${SUPERAPP_BACKEND_URL}/v3/pay/transactions/jsapi`, orderBody);
+      if (spResp.prepay_id) prepay_id = spResp.prepay_id;
+      console.log(`  [/payOrderV3] superapp-backend registered ✅ prepay_id=${prepay_id}`);
+    } catch (err) {
+      console.error(`  [/payOrderV3] superapp-backend registration failed:`, err.message);
+    }
   }
 
   // Step 3: Generate paySign for wx.requestPayment
@@ -268,13 +284,14 @@ app.post("/payOrderV3", async (req, res) => {
 app.post("/notify_payBack", async (req, res) => {
   console.log(`  [/notify_payBack] received`);
 
-  // Handle both SAS format (Wechatpay-* headers) and direct HMAC format
-  const wechatpaySignature = req.headers["wechatpay-signature"];
+  // Handle both SAS format (SAS payment headers) and direct HMAC format
+  // SAS sends "wechatpay-signature" header (SAS internal protocol — not WeChat Pay)
+  const sasPaySignature = req.headers["wechatpay-signature"] || req.headers["uobpay-signature"];
   const hmacSignature      = req.body.signature;
 
-  if (wechatpaySignature) {
+  if (sasPaySignature) {
     // SAS delivered this — decrypt AES-GCM body
-    console.log(`  [/notify_payBack] SAS delivery with Wechatpay-Signature`);
+    console.log(`  [/notify_payBack] SAS delivery with payment signature`);
     try {
       const { resource } = req.body;
       if (resource && resource.ciphertext) {
