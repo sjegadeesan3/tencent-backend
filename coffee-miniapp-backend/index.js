@@ -229,7 +229,7 @@ app.post("/payOrderV3", async (req, res) => {
 
     const sasResponse = await httpPost(sasUrl, orderBody, {
       "Authorization":     authHeader,
-      "TCPaymentCallback": `${MINIAPP_BACKEND_URL}/notify_payBack`,
+      "TCPaymentCallback": `${SUPERAPP_BACKEND_URL}/payment/notify`,
       "TCMerchantID":      MCHID,
       "TC-UserID":         user.openid,
       "TCTradeType":       "JSAPI",
