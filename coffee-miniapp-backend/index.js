@@ -201,7 +201,8 @@ app.post("/payOrderV3", async (req, res) => {
     out_trade_no,
     notify_url:  `${MINIAPP_BACKEND_URL}/notify_payBack`,
     time_expire: (() => {
-      const d = new Date(Date.now() + 30 * 60 * 1000);
+      // SGT = UTC+8, format: yyyy-MM-ddTHH:mm:ss+08:00
+      const d = new Date(Date.now() + 30 * 60 * 1000 + 8 * 60 * 60 * 1000);
       return d.toISOString().replace('Z', '+08:00').replace(/\.\d{3}/, '');
     })(),
     amount:      { total: totalAmount, currency: "SGD" },
