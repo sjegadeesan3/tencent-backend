@@ -209,7 +209,7 @@ app.post("/payOrderV3", async (req, res) => {
   // Step 2: Call SAS /v3/pay/transactions/jsapi → superapp-backend → prepay_id
   let prepay_id;
   try {
-    const sasUrl  = `${TCSAS_OPENSERVER}/v3/pay/transactions/jsapi`;
+    const sasUrl  = `${TCSAS_OPENSERVER}/payment/v3/pay/transactions/jsapi`;
     const bodyStr = JSON.stringify(orderBody);
     console.log(`  [/payOrderV3] POST ${sasUrl}`);
 
