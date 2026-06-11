@@ -41,7 +41,7 @@ function ipLabel(ip) {
 // API: nginx logs
 router.get("/api/nginx", (req, res) => {
   const lines = readLastLines(NGINX_LOG, 500)
-    .filter(l => !l.includes("logs/data") && !l.includes("favicon"))
+    .filter(l => !l.includes("logs/data") && !l.includes("favicon") && !l.includes("serverDashboard"))
     .map(parseNginxLine)
     .filter(Boolean)
     .reverse();
