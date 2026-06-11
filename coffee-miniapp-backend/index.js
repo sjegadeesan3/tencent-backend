@@ -210,33 +210,28 @@ app.post("/payOrderV3", async (req, res) => {
   let prepay_id;
   try {
     const sasUrl  = "https://openapi-sg.tcmpp.com/payment/v3/pay/transactions/jsapi";
-    const bodyStr = JSON.stringify(orderBody);
     console.log(`  [/payOrderV3] POST ${sasUrl}`);
 
-    // Use tc-signature AES-ECB — same auth method as login /user/checkUser
-    const tcTimestamp = Date.now().toString();
-    const APP_ENCRYPT_KEY = process.env.APP_ENCRYPT_KEY || "0123456789abcdef0123456789abcdef";
-    const tcSig = (() => {
-      const key     = Buffer.from(APP_ENCRYPT_KEY.substring(0, 32).padEnd(32, "0"), "utf8");
-      const ts      = Buffer.from(tcTimestamp, "utf8");
-      const padding = 16 - (ts.length % 16);
-      const padded  = Buffer.concat([ts, Buffer.alloc(padding, padding)]);
-      const cipher  = crypto.createCipheriv("aes-256-ecb", key, null);
-      cipher.setAutoPadding(false);
-      return Buffer.concat([cipher.update(padded), cipher.final()]).toString("hex");
-    })();
+    // Build Authorization header — WECHATPAY2-SHA256-RSA2048
+    // Required by SAS for /payment/v3/pay/transactions/jsapi
+    const ts       = Math.floor(Date.now() / 1000).toString();
+    const nc       = crypto.randomBytes(16).toString("hex").toUpperCase();
+    const urlPath  = "/payment/v3/pay/transactions/jsapi";
+    const bodyStr  = JSON.stringify(orderBody);
+    const message  = `POST\n${urlPath}\n${ts}\n${nc}\n${bodyStr}\n`;
+    const sign     = crypto.createSign("RSA-SHA256");
+    sign.update(message);
+    const signature = sign.sign(MERCHANT_PRIVATE_KEY, "base64");
+    const authHeader = `WECHATPAY2-SHA256-RSA2048 mchid="${MCHID}",nonce_str="${nc}",signature="${signature}",timestamp="${ts}",serial_no="${MERCHANT_CERT_SERIAL}"`;
 
     const sasResponse = await httpPost(sasUrl, orderBody, {
-      // TC headers required by SAS for payment order creation
+      "Authorization":     authHeader,
       "TCPaymentCallback": `${MINIAPP_BACKEND_URL}/notify_payBack`,
       "TCMerchantID":      MCHID,
       "TC-UserID":         user.openid,
       "TCTradeType":       "JSAPI",
       "TCPlatformUserID":  user.openid,
       "TCApplicationID":   process.env.SUPERAPP_ID || "app-zz8btbv1s4",
-      // tc-signature AES-ECB auth (same as login)
-      "TC-Timestamp":      tcTimestamp,
-      "TC-Signature":      tcSig,
       "Content-Type":      "application/json"
     });
     console.log(`  [/payOrderV3] SAS response:`, JSON.stringify(sasResponse));
