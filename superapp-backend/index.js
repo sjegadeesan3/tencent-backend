@@ -354,6 +354,7 @@ async function notifySASPaymentResult(order) {
       `-H 'TC-Callback-OutTradeNo: ${order.out_trade_no}'`,
       `-H 'TC-Callback-Signature: ${tcCallbackSignature}'`,
       `-H 'TC-ApplicationID: ${SUPERAPP_ID}'`,
+      `-H 'TC-MerchantID: ${order.mchid || MERCHANT_ID}'`,
       `-H 'Content-Type: application/json'`,
     ].join(" \\\n  ");
     console.log(`  [notifySASPaymentResult] FULL CURL:\ncurl -X POST '${url}' \\\n  ${curlHeaders} \\\n  -d '${bodyStr}'`);
@@ -366,6 +367,7 @@ async function notifySASPaymentResult(order) {
       "TC-Callback-OutTradeNo": order.out_trade_no,
       "TC-Callback-Signature":  tcCallbackSignature,
       "TC-ApplicationID":       SUPERAPP_ID,
+      "TC-MerchantID":          order.mchid || MERCHANT_ID,
     });
     console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
 
