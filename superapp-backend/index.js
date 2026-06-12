@@ -256,17 +256,12 @@ async function notifySASPaymentResult(order) {
     return d.toISOString().replace('Z', '+08:00').replace(/\.\d{3}/, '');
   })();
 
-  // PLAIN (unencrypted) body — matching the flat style of section 2.1.
-  // The AES-256-GCM "resource" envelope describes messages SAS sends TO
-  // the merchant (notify_payBack), not what we send TO SAS — so we send
-  // plain fields here instead.
-  const bodyObj = {
-    id:               uuidv4(),
-    create_time:      successTime,
-    event_type:       "TRANSACTION.SUCCESS",
+  // AES-256-GCM encrypted resource — confirmed correct format by Tencent.
+  // Requires APIv3 key (APIV3_KEY) to be registered for this merchant
+  // in TCSAS portal (Standard Payment → Merchant Settings → STARBUCKS001).
+  const innerData = {
     transaction_id:   order.transaction_id || ("txn_" + Date.now()),
     mch_id:           order.mchid || MERCHANT_ID,
-    mchid:            order.mchid || MERCHANT_ID,
     out_trade_no:     order.out_trade_no,
     appid:            order.appid,
     trade_state:      "SUCCESS",
@@ -274,15 +269,36 @@ async function notifySASPaymentResult(order) {
     trade_type:       "JSAPI",
     bank_type:        "OTHERS",
     success_time:     successTime,
-    payer: {
-      openid: (order.payer && order.payer.openid) || "",
-    },
-    attach: "",
+    payer:            (order.payer && order.payer.openid) || "",
+    attach:           "",
     amount: {
-      total:          amountTotal,
-      payer_total:    amountTotal,
+      total:          String(amountTotal),
+      payer_total:    String(amountTotal),
       currency:       currency,
       payer_currency: currency,
+    }
+  };
+
+  const apiKey = Buffer.from(APIV3_KEY.padEnd(32, "0").substring(0, 32), "utf8");
+  const nonce  = crypto.randomBytes(12);
+  const plaintext = JSON.stringify(innerData);
+  const cipher = crypto.createCipheriv("aes-256-gcm", apiKey, nonce);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag    = cipher.getAuthTag();
+  const ciphertext = Buffer.concat([encrypted, authTag]).toString("base64");
+
+  const bodyObj = {
+    id:            uuidv4(),
+    create_time:   successTime,
+    event_type:    "TRANSACTION.SUCCESS",
+    resource_type: "encrypt-resource",
+    summary:       "pay success",
+    resource: {
+      original_type:   "transaction",
+      algorithm:       "AEAD_AES_256_GCM",
+      ciphertext:      ciphertext,
+      associated_data: "",
+      nonce:           nonce.toString("base64"),
     }
   };
 
@@ -306,6 +322,8 @@ async function notifySASPaymentResult(order) {
     const result = await httpPost(url, bodyObj, {
       "x-tc-timestamp":   tcTimestamp,
       "x-tc-signature":   tcSig,
+      "TC-Timestamp":     tcTimestamp,
+      "TC-Signature":     tcSig,
       "TC-ApplicationID": SUPERAPP_ID,
     });
     console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
