@@ -293,6 +293,10 @@ async function notifySASPaymentResult(order) {
     event_type:    "TRANSACTION.SUCCESS",
     resource_type: "encrypt-resource",
     summary:       "pay success",
+    out_trade_no:  order.out_trade_no,
+    mchid:         order.mchid || MERCHANT_ID,
+    mch_id:        order.mchid || MERCHANT_ID,
+    appid:         order.appid,
     resource: {
       original_type:   "transaction",
       algorithm:       "AEAD_AES_256_GCM",
