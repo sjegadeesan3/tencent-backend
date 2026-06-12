@@ -303,6 +303,10 @@ async function notifySASPaymentResult(order) {
       ciphertext:      ciphertext,
       associated_data: "",
       nonce:           nonce.toString("base64"),
+      out_trade_no:    order.out_trade_no,
+      mchid:           order.mchid || MERCHANT_ID,
+      mch_id:          order.mchid || MERCHANT_ID,
+      appid:           order.appid,
     }
   };
 
