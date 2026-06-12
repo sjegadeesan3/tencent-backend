@@ -346,6 +346,18 @@ async function notifySASPaymentResult(order) {
   console.log(`  [notifySASPaymentResult] out_trade_no=${order.out_trade_no} trade_state=SUCCESS`);
 
   try {
+    const curlHeaders = [
+      `-H 'TC-Callback-Serial: ${MERCHANT_CERT_SERIAL}'`,
+      `-H 'TC-Signature: ${tcSig}'`,
+      `-H 'TC-Timestamp: ${tcTimestampSec}'`,
+      `-H 'TC-Callback-Nonce: ${callbackNonce}'`,
+      `-H 'TC-Callback-OutTradeNo: ${order.out_trade_no}'`,
+      `-H 'TC-Callback-Signature: ${tcCallbackSignature}'`,
+      `-H 'TC-ApplicationID: ${SUPERAPP_ID}'`,
+      `-H 'Content-Type: application/json'`,
+    ].join(" \\\n  ");
+    console.log(`  [notifySASPaymentResult] FULL CURL:\ncurl -X POST '${url}' \\\n  ${curlHeaders} \\\n  -d '${bodyStr}'`);
+
     const result = await httpPost(url, bodyObj, {
       "TC-Callback-Serial":     MERCHANT_CERT_SERIAL,
       "TC-Signature":           tcSig,
