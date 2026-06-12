@@ -185,7 +185,8 @@ app.post("/payOrderV3", async (req, res) => {
 
   // Step 1: Generate MP orderID
   const out_trade_no = `order_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-  const totalAmount  = goods_detail?.reduce((sum, g) => sum + (g.unit_price * g.quantity), 0) || 0;
+  // amount.total must be in cents (smallest currency unit) per Tencent spec
+  const totalAmount  = (goods_detail?.reduce((sum, g) => sum + (g.unit_price * g.quantity), 0) || 0) * 100;
   const timeStamp    = Math.floor(Date.now() / 1000).toString();
   const nonceStr     = crypto.randomBytes(10).toString("hex");
 
@@ -229,7 +230,7 @@ app.post("/payOrderV3", async (req, res) => {
 
     const sasResponse = await httpPost(sasUrl, orderBody, {
       "Authorization":     authHeader,
-      "TC-Payment-Callback": `${SUPERAPP_BACKEND_URL}/payment/notify`,
+      "TC-Payment-Callback": `${MINIAPP_BACKEND_URL}/notify_payBack`,
       "TC-MerchantID":      MCHID,
       "TC-UserID":         user.openid,
       "TC-TradeType":       "JSAPI",
