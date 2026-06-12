@@ -286,27 +286,27 @@ async function notifySASPaymentResult(order) {
     }
   };
 
-  const bodyStr = JSON.stringify(bodyObj);
-
-  // Authorization — same RSA scheme as /v3/pay/transactions/jsapi
-  const ts      = Math.floor(Date.now() / 1000).toString();
-  const nc      = crypto.randomBytes(16).toString("hex").toUpperCase();
-  const urlPath = "/payment/super-app/transactions/callback";
-  const message = `POST\n${urlPath}\n${ts}\n${nc}\n${bodyStr}\n`;
-  const sign    = crypto.createSign("RSA-SHA256");
-  sign.update(message);
-  const signature = sign.sign(MERCHANT_PRIVATE_KEY, "base64");
-  const mchid = order.mchid || MERCHANT_ID;
-  const authHeader = `WECHATPAY2-SHA256-RSA2048 mchid="${mchid}",nonce_str="${nc}",signature="${signature}",timestamp="${ts}",serial_no="${MERCHANT_CERT_SERIAL}"`;
+  // Authorization — same x-tc-timestamp/x-tc-signature (AES-256-ECB) scheme
+  // used by our other endpoints (e.g. /user/checkUser, verifyTCSignature)
+  const tcTimestamp = Date.now().toString();
+  const tcSig = (() => {
+    const key     = Buffer.from(SECRET_KEY.substring(0, 32).padEnd(32, "0"), "utf8");
+    const ts      = Buffer.from(tcTimestamp, "utf8");
+    const padding = 16 - (ts.length % 16);
+    const padded  = Buffer.concat([ts, Buffer.alloc(padding, padding)]);
+    const cipher  = crypto.createCipheriv("aes-256-ecb", key, null);
+    cipher.setAutoPadding(false);
+    return Buffer.concat([cipher.update(padded), cipher.final()]).toString("hex");
+  })();
 
   console.log(`  [notifySASPaymentResult] POST ${url}`);
   console.log(`  [notifySASPaymentResult] out_trade_no=${order.out_trade_no} trade_state=SUCCESS`);
 
   try {
     const result = await httpPost(url, bodyObj, {
-      "Authorization":    authHeader,
+      "x-tc-timestamp":   tcTimestamp,
+      "x-tc-signature":   tcSig,
       "TC-ApplicationID": SUPERAPP_ID,
-      "Content-Type":     "application/json",
     });
     console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
 
