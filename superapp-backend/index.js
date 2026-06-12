@@ -287,6 +287,11 @@ async function notifySASPaymentResult(order) {
   const authTag    = cipher.getAuthTag();
   const ciphertext = Buffer.concat([encrypted, authTag]).toString("base64");
 
+  console.log(`  [notifySASPaymentResult] DEBUG innerData:`, plaintext);
+  console.log(`  [notifySASPaymentResult] DEBUG ciphertext:`, ciphertext);
+  console.log(`  [notifySASPaymentResult] DEBUG nonce:`, nonce.toString("base64"));
+  console.log(`  [notifySASPaymentResult] DEBUG APIV3_KEY:`, APIV3_KEY);
+
   const bodyObj = {
     id:            uuidv4(),
     create_time:   successTime,
