@@ -447,25 +447,55 @@ app.post("/payment/notify/ack", async (req, res) => {
 });
 
 // ── Existing login endpoints ──────────────────────────────────
+// POST /user/checkUser — per Code Integration Guide API spec (1.1):
+//   Headers: TC-OpenId, TC-MiniAppID (context identifiers, signature-verified)
+//   Body:    { userId: string }  — anonymized userId from the SDK
+//   Returns: { returnCode, data: <boolean: does user exist>, requestId }
 app.post("/user/checkUser", async (req, res) => {
   const tcTimestamp = req.headers["x-tc-timestamp"] || req.headers["tc-timestamp"] || "";
   const tcSignature = req.headers["x-tc-signature"] || req.headers["tc-signature"] || "";
   if (tcTimestamp && tcSignature && !verifyTCSignature(tcTimestamp, tcSignature)) {
     return res.json({ returnCode: "1003", returnMessage: "Invalid signature", requestId: uuidv4() });
   }
-  const { accountid } = req.body;
-  console.log(`  [checkUser] accountid=${accountid}`);
-  return res.json({ returnCode: "0", data: true, requestId: uuidv4() });
+
+  const tcOpenId    = req.headers["tc-openid"]    || req.headers["TC-OpenId"]    || "";
+  const tcMiniAppID = req.headers["tc-miniappid"] || req.headers["TC-MiniAppID"] || "";
+  const { userId } = req.body;
+
+  console.log(`  [checkUser] userId=${userId} TC-OpenId=${tcOpenId} TC-MiniAppID=${tcMiniAppID}`);
+
+  if (!userId) {
+    return res.json({ returnCode: "1004", returnMessage: "Missing userId", requestId: uuidv4() });
+  }
+
+  // PoC: every anonymized userId presented is considered an existing/registered user.
+  const userExists = true;
+  console.log(`  [checkUser] user exists=${userExists}`);
+  return res.json({ returnCode: "0", data: userExists, requestId: uuidv4() });
+});
+
+// POST /user/getUserAvatar — spec 1.6, was missing entirely
+app.post("/user/getUserAvatar", async (req, res) => {
+  const { userId } = req.body;
+  console.log(`  [getUserAvatar] userId=${userId}`);
+  return res.json({ returnCode: "0", data: "https://picsum.photos/100", requestId: uuidv4() });
 });
 
 app.post("/user/getUserInfoTemporaryCode", async (req, res) => {
-  return res.json({ returnCode: "0", data: { temporaryCode: uuidv4() }, requestId: uuidv4() });
+  const { type, userId } = req.body; // type: "email" | "phone"
+  console.log(`  [getUserInfoTemporaryCode] type=${type} userId=${userId}`);
+  const masked = type === "email" ? "mu****ng@tencent.com" : "158****2850";
+  return res.json({ returnCode: "0", data: { data: masked, code: uuidv4() }, requestId: uuidv4() });
 });
 app.post("/user/getUserEmail", async (req, res) => {
-  return res.json({ returnCode: "0", data: { encryptedEmail: "" }, requestId: uuidv4() });
+  const { temporaryCode, userId } = req.body;
+  console.log(`  [getUserEmail] userId=${userId} temporaryCode=${temporaryCode}`);
+  return res.json({ returnCode: "0", data: "", requestId: uuidv4() });
 });
 app.post("/user/getUserPhoneNumber", async (req, res) => {
-  return res.json({ returnCode: "0", data: { encryptedPhone: "" }, requestId: uuidv4() });
+  const { temporaryCode, userId } = req.body;
+  console.log(`  [getUserPhoneNumber] userId=${userId} temporaryCode=${temporaryCode}`);
+  return res.json({ returnCode: "0", data: "", requestId: uuidv4() });
 });
 app.post("/user/getUserNick", async (req, res) => {
   return res.json({ returnCode: "0", data: { nick: "UOB User" }, requestId: uuidv4() });
