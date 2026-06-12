@@ -312,12 +312,14 @@ async function notifySASPaymentResult(order) {
 
   const bodyStr = JSON.stringify(bodyObj);
 
-  // TC-Timestamp (ms) + TC-Signature (AES-256-ECB) — this combination got
-  // past InternalError to MissingParameter, the furthest so far.
-  const tcTimestamp = Date.now().toString();
+  // Section 2.2 (TC-Payment-Callback) headers — all required per Tencent.
+  // Use ONE consistent timestamp (seconds) for both TC-Timestamp and TC-Signature.
+  const tcTimestampSec = Math.floor(Date.now() / 1000).toString();
+
+  // TC-Signature — AES-256-ECB over the seconds timestamp (consistent with TC-Timestamp header)
   const tcSig = (() => {
     const key     = Buffer.from(SECRET_KEY.substring(0, 32).padEnd(32, "0"), "utf8");
-    const ts      = Buffer.from(tcTimestamp, "utf8");
+    const ts      = Buffer.from(tcTimestampSec, "utf8");
     const padding = 16 - (ts.length % 16);
     const padded  = Buffer.concat([ts, Buffer.alloc(padding, padding)]);
     const cipher  = crypto.createCipheriv("aes-256-ecb", key, null);
@@ -325,14 +327,28 @@ async function notifySASPaymentResult(order) {
     return Buffer.concat([cipher.update(padded), cipher.final()]).toString("hex");
   })();
 
+  const callbackNonce = crypto.randomBytes(16).toString("hex").toUpperCase();
+
+  // TC-Callback-Signature — APIv3 Certificate Signature (RSA-SHA256) of
+  // timestamp\nnonce\nbody\n, signed with merchant private key (same
+  // seconds timestamp as TC-Timestamp / TC-Signature above)
+  const callbackSigMessage = `${tcTimestampSec}\n${callbackNonce}\n${bodyStr}\n`;
+  const callbackSign = crypto.createSign("RSA-SHA256");
+  callbackSign.update(callbackSigMessage);
+  const tcCallbackSignature = callbackSign.sign(MERCHANT_PRIVATE_KEY, "base64");
+
   console.log(`  [notifySASPaymentResult] POST ${url}`);
   console.log(`  [notifySASPaymentResult] out_trade_no=${order.out_trade_no} trade_state=SUCCESS`);
 
   try {
     const result = await httpPost(url, bodyObj, {
-      "TC-Timestamp":     tcTimestamp,
-      "TC-Signature":     tcSig,
-      "TC-ApplicationID": SUPERAPP_ID,
+      "TC-Callback-Serial":     MERCHANT_CERT_SERIAL,
+      "TC-Signature":           tcSig,
+      "TC-Timestamp":           tcTimestampSec,
+      "TC-Callback-Nonce":      callbackNonce,
+      "TC-Callback-OutTradeNo": order.out_trade_no,
+      "TC-Callback-Signature":  tcCallbackSignature,
+      "TC-ApplicationID":       SUPERAPP_ID,
     });
     console.log(`  [notifySASPaymentResult] SAS response:`, JSON.stringify(result));
 
